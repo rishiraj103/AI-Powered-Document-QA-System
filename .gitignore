@@ -1,0 +1,31 @@
+# Python / Virtual Environment
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables & secrets
+backend/.env
+.env
+.env.local
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# RAG Data & Indexes (keep .gitkeep only)
+documents/*
+!documents/.gitkeep
+faiss_index/*
+!faiss_index/.gitkeep
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
