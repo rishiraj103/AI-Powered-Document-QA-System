@@ -175,41 +175,31 @@ def split_documents(docs: list[Document]) -> list[Document]:
 
 
 def ingest_pdf(pdf_path: str) -> None:
-    """
-    Full ingest pipeline for a single PDF:
-      extract → split → embed → store in FAISS.
+    """Build a fresh FAISS index from one PDF."""
+    rebuild_index([pdf_path])
 
-    If a FAISS index already exists on disk, the new chunks are
-    merged into it so multiple PDFs accumulate in the same index.
-    """
-    print(f"[ingest] Processing: {pdf_path}")
 
-    pages  = extract_text(pdf_path)
-    chunks = split_documents(pages)
-    print(f"[ingest] {len(pages)} pages → {len(chunks)} chunks")
+def rebuild_index(pdf_paths: list[str]) -> None:
+    """Build a fresh FAISS index containing only the supplied PDF batch."""
+    all_chunks = []
 
-    embeddings  = _get_embeddings()
-    index_file  = Path(FAISS_DIR) / "index.faiss"
+    for pdf_path in pdf_paths:
+        print(f"[ingest] Processing active batch document: {pdf_path}")
+        pages = extract_text(pdf_path)
+        chunks = split_documents(pages)
+        print(f"[ingest] {len(pages)} pages -> {len(chunks)} chunks")
+        all_chunks.extend(chunks)
 
-    if index_file.exists():
-        try:
-            # Merge new chunks into existing index
-            existing = FAISS.load_local(
-                FAISS_DIR,
-                embeddings,
-                allow_dangerous_deserialization=True,
-            )
-            existing.add_documents(chunks)
-            existing.save_local(FAISS_DIR)
-            print("[ingest] Merged into existing FAISS index.")
-            return
-        except Exception as e:
-            print(f"[ingest] Failed to merge with existing index ({e}). Rebuilding fresh index...")
+    if not all_chunks:
+        raise ValueError("No extractable text was found in the uploaded PDFs.")
 
-    # Create a brand-new index
-    db = FAISS.from_documents(chunks, embeddings)
+    embeddings = _get_embeddings()
+    db = FAISS.from_documents(all_chunks, embeddings)
     db.save_local(FAISS_DIR)
-    print("[ingest] Created new FAISS index.")
+    print(
+        f"[ingest] Replaced active FAISS index with "
+        f"{len(all_chunks)} chunks from {len(pdf_paths)} document(s)."
+    )
 
 
 # ── Query ─────────────────────────────────────────────────────────────────────

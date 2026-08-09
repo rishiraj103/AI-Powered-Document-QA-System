@@ -1,9 +1,11 @@
 # AI-Powered Document QA System (RAG)
 
-A minimal university project implementing **Retrieval-Augmented Generation** with:
+A presentation-ready document intelligence application implementing **Retrieval-Augmented Generation** with:
 
 - **Backend**: FastAPI + LangChain + FAISS + PyMuPDF + Google Gemini
 - **Frontend**: React + Vite + TailwindCSS
+
+The frontend includes multi-file drag-and-drop, a session document library, live backend status, question suggestions, Markdown answers, searchable numbered source cards, source copying, keyboard shortcuts, and local recent-question history.
 
 ---
 

@@ -3,7 +3,6 @@ main.py — FastAPI entry point
 Endpoints: GET /health, POST /upload, POST /query
 """
 
-import os
 import shutil
 import traceback
 from pathlib import Path
@@ -13,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 
-from rag import ingest_pdf, answer_question
+from rag import rebuild_index, answer_question
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DOCUMENTS_DIR = Path(__file__).parent.parent / "documents"
@@ -44,24 +43,36 @@ async def upload(files: List[UploadFile] = File(...)):
     Returns the list of processed filenames.
     """
     processed = []
+    saved_paths = []
     for file in files:
-        if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF.")
+        original_name = file.filename or ""
+        safe_name = Path(original_name).name
+        if not safe_name or not safe_name.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"{original_name or 'Uploaded file'} is not a PDF.")
 
-        dest = DOCUMENTS_DIR / file.filename
+        # Keep uploads inside the documents directory even when a client sends
+        # path-like filenames. The endpoint response shape remains unchanged.
+        dest = DOCUMENTS_DIR / safe_name
         with dest.open("wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        try:
-            ingest_pdf(str(dest))
-            processed.append(file.filename)
-        except Exception as e:
-            # Print full traceback to backend terminal for debugging
-            traceback.print_exc()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to index '{file.filename}': {str(e)}"
-            )
+        if dest.stat().st_size == 0:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail=f"'{safe_name}' is empty.")
+
+        processed.append(safe_name)
+        saved_paths.append(str(dest))
+
+    try:
+        # A single upload request is one active knowledge base. Rebuilding once
+        # preserves multi-file uploads while excluding every earlier batch.
+        rebuild_index(saved_paths)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to index uploaded documents: {str(e)}"
+        )
 
     return {"message": "Uploaded and indexed.", "files": processed}
 

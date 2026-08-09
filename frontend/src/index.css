@@ -2,6 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-synthesis: none; text-rendering: optimizeLegibility; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #08080a; }
+button, textarea, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+::selection { background: rgba(139, 92, 246, 0.35); color: white; }
+
+@layer components {
+  .panel { @apply rounded-2xl border border-white/[0.07] bg-panel shadow-panel; }
+  .hero-panel { background: radial-gradient(circle at 87% 25%, rgba(124,58,237,.15), transparent 24%), linear-gradient(125deg, rgba(24,24,29,.94), rgba(14,14,18,.98)); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 24px 80px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.035); }
+  .ambient-glow { @apply pointer-events-none absolute left-1/2 top-[-7rem] h-72 w-3/4 -translate-x-1/2 rounded-full blur-3xl; background: rgba(99,60,180,.08); }
+  .hero-orbit { @apply absolute -right-12 -top-20 hidden h-72 w-72 items-center justify-center rounded-full border border-violet-400/10 text-violet-300/70 lg:flex; box-shadow: inset 0 0 80px rgba(124,58,237,.06), 0 0 0 55px rgba(124,58,237,.025), 0 0 0 110px rgba(124,58,237,.012); }
+  .hero-orbit svg:last-child { @apply absolute bottom-12 left-6 text-zinc-600; }
+  .eyebrow { @apply inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/[0.07] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em] text-violet-300; }
+  .section-kicker { @apply text-[10px] font-semibold uppercase tracking-[0.17em] text-zinc-600; }
+  .flow-step { @apply inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03] text-[9px] font-semibold text-zinc-500; }
+  .brand-mark { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-500/10 text-violet-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]; }
+  .status-pill { @apply flex h-8 items-center gap-2 rounded-full border px-2.5 text-[10px] font-medium sm:px-3; }
+  .status-dot { @apply h-1.5 w-1.5 rounded-full; }
+  .status-online { @apply border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-400; }
+  .status-online .status-dot { @apply bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.75)]; }
+  .status-offline { @apply border-red-400/15 bg-red-400/[0.06] text-red-400; }
+  .status-offline .status-dot { @apply bg-red-400; }
+  .status-checking { @apply border-white/[0.07] bg-white/[0.03] text-zinc-500; }
+  .status-checking .status-dot { @apply animate-pulse bg-zinc-500; }
+  .shortcut-button { @apply hidden h-8 items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 text-[10px] text-zinc-500 transition hover:border-white/[0.13] hover:text-zinc-300 sm:flex; }
+  .shortcut-button span { @apply rounded border border-white/[0.08] px-1 py-0.5 leading-none; }
+  .icon-button { @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-zinc-500 transition duration-200 hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-not-allowed disabled:opacity-40; }
+  .count-badge { @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[10px] font-medium text-zinc-500; }
+  .upload-zone { @apply flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.12] bg-black/10 px-4 py-7 text-center transition duration-200 hover:border-violet-400/40 hover:bg-violet-400/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60; }
+  .upload-zone.is-dragging { @apply border-violet-400/70 bg-violet-400/[0.06]; }
+  .upload-icon { @apply flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-zinc-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]; }
+  .file-row, .document-card { @apply flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5; }
+  .document-card { @apply transition hover:border-white/[0.1] hover:bg-white/[0.035]; }
+  .pdf-icon { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-400/10 bg-red-400/[0.06] text-red-300; }
+  .primary-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-[0_8px_24px_rgba(109,40,217,0.2)] transition duration-200 hover:bg-violet-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600 disabled:shadow-none; }
+  .secondary-button { @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs font-medium text-zinc-400 transition hover:border-white/[0.13] hover:bg-white/[0.05] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70; }
+  .composer { @apply overflow-hidden rounded-2xl border border-white/[0.09] bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition focus-within:border-violet-400/45 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.07)]; }
+  .composer-input { @apply min-h-28 w-full resize-none border-0 bg-transparent px-4 pb-2 pt-4 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-wait disabled:opacity-60 sm:px-5 sm:pt-5; }
+  .ask-button { @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3.5 text-xs font-semibold text-white transition hover:bg-violet-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600; }
+  .suggestion-chip { @apply rounded-full border border-white/[0.07] bg-white/[0.02] px-3 py-1.5 text-[11px] text-zinc-500 transition hover:border-violet-400/25 hover:bg-violet-400/[0.045] hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60; }
+  .history-item { @apply block w-full truncate rounded-lg px-2 py-2 text-left text-xs text-zinc-500 transition hover:bg-white/[0.035] hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60; }
+  .empty-state { @apply flex min-h-[330px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.07] bg-white/[0.012] px-6 py-12 text-center; }
+  .empty-icon { @apply flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/15 bg-violet-400/[0.055] text-violet-300 shadow-[0_14px_35px_rgba(76,29,149,0.14)]; }
+  .answer-card { @apply overflow-hidden rounded-2xl border border-violet-400/15 bg-[linear-gradient(145deg,rgba(20,20,25,0.98),rgba(14,14,17,0.98))] shadow-panel; }
+  .ai-icon { @apply flex h-9 w-9 items-center justify-center rounded-xl border border-violet-400/20 bg-violet-400/[0.07] text-violet-300; }
+  .answer-content { @apply max-w-none text-sm leading-7 text-zinc-300; }
+  .answer-content p + p, .answer-content ul + p, .answer-content ol + p { @apply mt-4; }
+  .answer-content h1, .answer-content h2, .answer-content h3 { @apply mb-2 mt-5 font-semibold text-white; }
+  .answer-content h1 { @apply text-lg; }
+  .answer-content h2, .answer-content h3 { @apply text-base; }
+  .answer-content ul { @apply my-3 list-disc space-y-1 pl-5; }
+  .answer-content ol { @apply my-3 list-decimal space-y-1 pl-5; }
+  .answer-content strong { @apply font-semibold text-zinc-100; }
+  .answer-content code { @apply rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs text-violet-200; }
+  .answer-content pre { @apply my-4 overflow-x-auto rounded-xl border border-white/[0.06] bg-black/30 p-4; }
+  .answer-content pre code { @apply bg-transparent p-0; }
+  .source-card { @apply overflow-hidden rounded-xl border border-white/[0.07] bg-black/10 transition hover:border-white/[0.11]; }
+  .source-card.is-open { @apply border-violet-400/15 bg-violet-400/[0.018]; }
+  .source-number { @apply text-[10px] font-semibold tabular-nums tracking-wider text-violet-400; }
+  .source-content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 220ms ease; }
+  .source-content > div { overflow: hidden; }
+  .source-card.is-open .source-content { grid-template-rows: 1fr; }
+  .copy-button { @apply inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.07] px-2.5 text-[10px] font-medium text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60; }
+  .copy-button.is-copied { @apply border-emerald-400/15 bg-emerald-400/[0.05] text-emerald-400; }
+  .source-search { @apply flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-black/20 px-3 text-zinc-600 transition focus-within:border-violet-400/35; }
+  .source-search input { @apply w-40 border-0 bg-transparent text-xs text-zinc-300 outline-none placeholder:text-zinc-700; }
+  .notice { @apply flex items-start gap-3 rounded-xl border px-4 py-3.5; }
+  .notice-success { @apply border-emerald-400/15 bg-emerald-400/[0.05] text-emerald-400; }
+  .notice-error { @apply border-red-400/15 bg-red-400/[0.05] text-red-300; }
 }
+
+@keyframes result-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.result-enter { animation: result-in 320ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

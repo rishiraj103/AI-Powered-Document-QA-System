@@ -1,257 +1,211 @@
-import { useState, useRef } from 'react'
-import axios from 'axios'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDown, BookOpen, Database, RotateCcw, Sparkles } from 'lucide-react'
+import Header from './components/Header'
+import UploadZone from './components/UploadZone'
+import DocumentLibrary from './components/DocumentLibrary'
+import QuestionInput from './components/QuestionInput'
+import QueryHistory from './components/QueryHistory'
+import AnswerCard from './components/AnswerCard'
+import AnswerEmptyState from './components/AnswerEmptyState'
+import SourceList from './components/SourceList'
+import Notice from './components/Notice'
+import { askQuestion, checkHealth, uploadDocuments } from './services/api'
 
-// ── Small reusable components ────────────────────────────────────────────────
+const HISTORY_KEY = 'rag-intelligence-history'
 
-/** Spinner shown while loading */
-function Spinner() {
-  return (
-    <div className="flex items-center gap-2 text-indigo-400 animate-pulse">
-      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-      </svg>
-      <span className="text-sm font-medium">Processing…</span>
-    </div>
-  )
+function readHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []
+  } catch {
+    return []
+  }
 }
-
-/** A single retrieved source chunk card */
-function SourceCard({ source, index }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-750 transition-colors"
-      >
-        <span className="text-sm font-medium text-gray-300">
-          Chunk {index + 1} &mdash;{' '}
-          <span className="text-indigo-400">{source.source}</span>
-          {source.page !== '?' && (
-            <span className="ml-2 text-gray-500 text-xs">page {source.page}</span>
-          )}
-        </span>
-        <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {open && (
-        <div className="px-4 pb-4 pt-1 text-xs text-gray-400 leading-relaxed whitespace-pre-wrap border-t border-gray-700">
-          {source.content}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  // Upload state
-  const [files, setFiles] = useState([])
+  const [systemStatus, setSystemStatus] = useState('checking')
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const [indexedDocuments, setIndexedDocuments] = useState([])
   const [uploading, setUploading] = useState(false)
-  const [uploadMsg, setUploadMsg] = useState(null)  // { type: 'success'|'error', text }
-  const fileInputRef = useRef(null)
-
-  // Query state
+  const [uploadNotice, setUploadNotice] = useState(null)
   const [question, setQuestion] = useState('')
   const [querying, setQuerying] = useState(false)
-  const [answer, setAnswer] = useState(null)   // string
-  const [sources, setSources] = useState([])   // array of source objects
-  const [queryError, setQueryError] = useState(null)
+  const [answer, setAnswer] = useState('')
+  const [sources, setSources] = useState([])
+  const [queryError, setQueryError] = useState('')
+  const [history, setHistory] = useState(readHistory)
+  const questionRef = useRef(null)
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let active = true
+    checkHealth()
+      .then(() => active && setSystemStatus('online'))
+      .catch(() => active && setSystemStatus('offline'))
+    return () => { active = false }
+  }, [])
 
-  function handleFileChange(e) {
-    setFiles(Array.from(e.target.files))
-    setUploadMsg(null)
+  useEffect(() => {
+    function focusQuestion(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        questionRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', focusQuestion)
+    return () => window.removeEventListener('keydown', focusQuestion)
+  }, [])
+
+  function addFiles(incomingFiles) {
+    const pdfs = Array.from(incomingFiles).filter(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))
+    const rejectedCount = incomingFiles.length - pdfs.length
+    setSelectedFiles(current => {
+      const existing = new Set(current.map(file => `${file.name}-${file.size}-${file.lastModified}`))
+      return [...current, ...pdfs.filter(file => !existing.has(`${file.name}-${file.size}-${file.lastModified}`))]
+    })
+    setUploadNotice(rejectedCount ? { type: 'error', title: 'PDF files only', message: `${rejectedCount} unsupported file${rejectedCount === 1 ? ' was' : 's were'} skipped.` } : null)
   }
 
   async function handleUpload() {
-    if (files.length === 0) return
+    if (!selectedFiles.length || uploading) return
     setUploading(true)
-    setUploadMsg(null)
-
-    const form = new FormData()
-    files.forEach(f => form.append('files', f))
-
+    setUploadNotice(null)
+    const pendingFiles = [...selectedFiles]
     try {
-      const res = await axios.post('/upload', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const data = await uploadDocuments(pendingFiles)
+      const uploadedNames = new Set(data.files)
+      const indexed = pendingFiles
+        .filter(file => uploadedNames.has(file.name))
+        .map(file => ({ name: file.name, size: file.size, indexedAt: Date.now() }))
+      setIndexedDocuments(indexed)
+      setSelectedFiles([])
+      setUploadNotice({
+        type: 'success',
+        title: 'Documents indexed successfully',
+        message: `${data.files.length} document${data.files.length === 1 ? ' is' : 's are'} now ready for questions.`,
       })
-      setUploadMsg({ type: 'success', text: `✓ ${res.data.files.join(', ')} indexed successfully.` })
-      setFiles([])
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    } catch (err) {
-      const detail = err.response?.data?.detail || 'Upload failed.'
-      setUploadMsg({ type: 'error', text: `✗ ${detail}` })
+      setSystemStatus('online')
+      window.setTimeout(() => questionRef.current?.focus(), 100)
+    } catch (error) {
+      setUploadNotice({ type: 'error', title: 'Unable to index documents', message: error.message })
     } finally {
       setUploading(false)
     }
   }
 
   async function handleQuery() {
-    if (!question.trim()) return
+    const cleanQuestion = question.trim()
+    if (!cleanQuestion || querying) return
     setQuerying(true)
-    setAnswer(null)
+    setAnswer('')
     setSources([])
-    setQueryError(null)
-
+    setQueryError('')
     try {
-      const res = await axios.post('/query', { question })
-      setAnswer(res.data.answer)
-      setSources(res.data.sources)
-    } catch (err) {
-      const detail = err.response?.data?.detail || 'Query failed.'
-      setQueryError(detail)
+      const data = await askQuestion(cleanQuestion)
+      setAnswer(data.answer)
+      setSources(data.sources || [])
+      const nextHistory = [cleanQuestion, ...history.filter(item => item !== cleanQuestion)].slice(0, 12)
+      setHistory(nextHistory)
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory))
+      setSystemStatus('online')
+    } catch (error) {
+      setQueryError(error.message)
     } finally {
       setQuerying(false)
     }
   }
 
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleQuery()
-    }
+  function clearResult() {
+    setQuestion('')
+    setAnswer('')
+    setSources([])
+    setQueryError('')
+    questionRef.current?.focus()
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const hasResult = Boolean(answer || queryError || querying)
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-3xl mx-auto px-6 py-5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-lg select-none">
-            📄
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold leading-none">RAG Document QA</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Ask questions about your PDFs</p>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-ink text-zinc-100">
+      <Header status={systemStatus} onFocusQuestion={() => questionRef.current?.focus()} />
 
-      <main className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+      <main className="relative mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+        <div className="ambient-glow" aria-hidden="true" />
 
-        {/* ── Upload Section ───────────────────────────────────────────── */}
-        <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
-            1. Upload PDFs
-          </h2>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
-            {/* Drop zone / file input */}
-            <label
-              htmlFor="pdf-input"
-              className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-600 rounded-lg py-8 cursor-pointer hover:border-indigo-500 hover:bg-gray-800 transition-colors"
-            >
-              <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
-              </svg>
-              <span className="text-sm text-gray-400">
-                {files.length > 0
-                  ? files.map(f => f.name).join(', ')
-                  : 'Click to select PDF(s)'}
-              </span>
-              <input
-                id="pdf-input"
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                multiple
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
-
-            {/* Upload button */}
-            <button
-              id="upload-btn"
-              onClick={handleUpload}
-              disabled={files.length === 0 || uploading}
-              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm transition-colors"
-            >
-              {uploading ? 'Uploading…' : 'Upload & Index'}
-            </button>
-
-            {/* Upload status */}
-            {uploading && <Spinner />}
-            {uploadMsg && (
-              <p className={`text-sm ${uploadMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                {uploadMsg.text}
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* ── Query Section ────────────────────────────────────────────── */}
-        <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
-            2. Ask a Question
-          </h2>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
-            <textarea
-              id="question-input"
-              rows={3}
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your question and press Enter or click Ask…"
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-            />
-            <button
-              id="ask-btn"
-              onClick={handleQuery}
-              disabled={!question.trim() || querying}
-              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm transition-colors"
-            >
-              {querying ? 'Thinking…' : 'Ask'}
-            </button>
-            {querying && <Spinner />}
-          </div>
-        </section>
-
-        {/* ── Answer Section ───────────────────────────────────────────── */}
-        {(answer || queryError) && (
-          <section>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
-              Answer
-            </h2>
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-              {queryError ? (
-                <p className="text-red-400 text-sm">{queryError}</p>
-              ) : (
-                <p className="text-gray-100 text-sm leading-relaxed whitespace-pre-wrap">{answer}</p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* ── Sources Section ──────────────────────────────────────────── */}
-        {sources.length > 0 && (
-          <section>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">
-              Retrieved Chunks ({sources.length})
-            </h2>
-            <div className="space-y-3">
-              {sources.map((src, i) => (
-                <SourceCard key={i} source={src} index={i} />
+        <section className="hero-panel relative overflow-hidden rounded-[28px] px-6 py-9 sm:px-10 sm:py-11">
+          <div className="relative z-10 max-w-3xl">
+            <div className="eyebrow"><Sparkles size={13} /> Document intelligence workspace</div>
+            <h1 className="mt-5 max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
+              Your documents. One intelligent interface.
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-400 sm:text-base">
+              Turn PDFs into grounded answers with semantic retrieval, transparent context, and Gemini.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              {['PDF documents', 'Semantic retrieval', 'Relevant context', 'Grounded answer'].map((label, index) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="flow-step">{index + 1}</span><span>{label}</span>
+                  {index < 3 && <ArrowDown className="mx-1 hidden -rotate-90 text-zinc-700 sm:block" size={13} />}
+                </div>
               ))}
             </div>
-          </section>
+          </div>
+          <div className="hero-orbit" aria-hidden="true"><Database size={30} /><BookOpen size={22} /></div>
+        </section>
+
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.45fr)]">
+          <div className="min-w-0">
+            <UploadZone
+              files={selectedFiles}
+              uploading={uploading}
+              onFiles={addFiles}
+              onRemove={index => setSelectedFiles(files => files.filter((_, fileIndex) => fileIndex !== index))}
+              onUpload={handleUpload}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <QuestionInput
+              ref={questionRef}
+              value={question}
+              querying={querying}
+              onChange={setQuestion}
+              onSubmit={handleQuery}
+              onClear={() => setQuestion('')}
+            />
+          </div>
+        </div>
+
+        {uploadNotice && (
+          <div className="mt-6">
+            <Notice {...uploadNotice} onRetry={uploadNotice.type === 'error' && selectedFiles.length ? handleUpload : undefined} />
+          </div>
         )}
 
+        <div className={`mt-6 grid gap-6 ${history.length ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
+          <DocumentLibrary documents={indexedDocuments} />
+          <QueryHistory history={history} onSelect={value => { setQuestion(value); questionRef.current?.focus() }} />
+        </div>
+
+        <section className={`mt-8 space-y-6 ${hasResult ? 'result-enter' : ''}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="section-kicker">Analysis</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Grounded response</h2>
+              </div>
+              {(answer || queryError) && (
+                <button className="secondary-button" onClick={clearResult}><RotateCcw size={14} /> Clear</button>
+              )}
+            </div>
+            {hasResult ? (
+              <AnswerCard answer={answer} sourceCount={sources.length} loading={querying} error={queryError} onRetry={handleQuery} />
+            ) : (
+              <AnswerEmptyState />
+            )}
+            {!querying && sources.length > 0 && <SourceList sources={sources} />}
+        </section>
       </main>
 
-      {/* Footer */}
-      <footer className="text-center py-6 text-xs text-gray-600 border-t border-gray-800 mt-8">
-        RAG QA System &mdash; University Project
+      <footer className="border-t border-white/[0.06] px-6 py-6 text-center text-xs text-zinc-600">
+        RAG Intelligence · Retrieval-augmented document assistant
       </footer>
     </div>
   )
