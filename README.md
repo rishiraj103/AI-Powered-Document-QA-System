@@ -175,7 +175,7 @@ curl -X POST http://localhost:8000/query \
 - API keys and environment files are excluded from Git.
 - Uploaded PDFs and generated FAISS index files remain local and are excluded from Git.
 - Filenames are sanitized before files are written to the `documents` directory.
-- CORS currently permits all origins because the application is configured for local development. Restrict allowed origins before deploying publicly.
+- Production uses one origin: FastAPI serves the built React interface and API together. For a separate frontend during development, set `CORS_ORIGINS` to a comma-separated list of allowed origins.
 - FAISS index loading uses pickle-based deserialization. Only load indexes created by this application from a trusted local directory.
 
 ## Build the Frontend
@@ -186,6 +186,21 @@ npm run build
 ```
 
 The production assets are generated in `frontend/dist/`.
+
+## Deploy to Render
+
+This repository includes a `Dockerfile` and `render.yaml` for a one-service deployment. The Docker image builds the React app and FastAPI serves it from the same URL, so no frontend API URL or production CORS configuration is required.
+
+The app writes uploaded PDFs and its FAISS index to disk. The included Render configuration therefore uses a persistent disk mounted at `/var/data`.
+
+1. Push this repository, including `Dockerfile` and `render.yaml`, to GitHub.
+2. Sign in to [Render](https://render.com/), select **New** > **Blueprint**, and connect this repository.
+3. Render reads `render.yaml`. During setup, enter a value for `GOOGLE_API_KEY` when prompted. Do not add this key to the repository.
+4. Review the service name, region, and paid plan, then create the Blueprint. Persistent disks require a paid Render web service.
+5. Once the deploy finishes, open the generated `onrender.com` URL and verify `https://<your-service>.onrender.com/health` returns `{"status":"ok"}`.
+6. Upload a small text-based PDF and ask a question to complete the smoke test.
+
+Use the Render dashboard logs if the deploy fails. The first PDF upload can take longer while the sentence-transformers model is downloaded. A persistent disk makes the uploaded PDFs and current FAISS index survive restarts and future deployments.
 
 ## License
 

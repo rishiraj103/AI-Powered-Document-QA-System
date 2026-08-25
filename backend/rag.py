@@ -33,9 +33,10 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
 
 # ── Config ────────────────────────────────────────────────────────────────────
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"))
 
-FAISS_DIR = str(Path(__file__).parent.parent / "faiss_index")
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).parent.parent))
+FAISS_DIR = str(DATA_DIR / "faiss_index")
 EMBEDDING_MODEL = "gemini-embedding-2-preview"
 # Fallback list of models in case one has 429 quota exhaustion or 404
 GEMINI_MODELS = [

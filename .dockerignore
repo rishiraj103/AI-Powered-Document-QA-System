@@ -1,0 +1,10 @@
+.git
+.venv
+backend/venv
+backend/.env
+frontend/node_modules
+frontend/dist
+documents
+faiss_index
+__pycache__
+*.py[cod]
